@@ -1,0 +1,23 @@
+
+custom_css = """
+.css-1tlyq77
+body {
+    background-color: #2c5d63;
+    color: #283739;
+    font-family: ;
+  }
+  
+  .stApp {
+    background-color: #b0d01e ; /* secondaryBackgroundColor */
+  }
+
+
+  .stButton > button {
+    background-color: #f6f8ec; /* primaryColor */
+    .rc-slider-track {
+        background-color: #f6f8ec!important;
+    }
+  }
+
+"""
+
