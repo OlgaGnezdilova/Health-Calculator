@@ -11,6 +11,18 @@ import seaborn as sns
 import pandas as pd
 from matplotlib import pyplot as plt
 
+# Add Open Graph metadata for social media previews
+st.markdown(
+    """
+    <meta property="og:title" content="Health Calculator">
+    <meta property="og:description" content="A Streamlit app to calculate your daily caloric requirements and suggest healthy foods.">
+    <meta property="og:image" content="URL_TO_YOUR_IMAGE">
+    <meta property="og:url" content="URL_OF_YOUR_APP">
+    <meta name="twitter:card" content="summary_large_image">
+    """,
+    unsafe_allow_html=True,
+)
+
 # Load CSS
 st.markdown(
     """
@@ -71,33 +83,32 @@ st.subheader("What did you eat today?")
 selected_foods = st.multiselect("", options=df_food['Food'])
 df_consumed = df_food[df_food['Food'].isin(selected_foods)].round(2)
 
-
 if st.button("Submit"):
-  st.write("Your today's result:") 
-  st.write(df_consumed)
+    st.write("Your today's result:") 
+    st.write(df_consumed)
     
-# Remove non-numeric columns and rows
-row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
-recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
-diff = row_to_display - recommended_values
+    # Remove non-numeric columns and rows
+    row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
+    recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
+    diff = row_to_display - recommended_values
     
-# Sort differences from the biggest lack to the lowest
-diff = diff.sort_values()
+    # Sort differences from the biggest lack to the lowest
+    diff = diff.sort_values()
 
-fig, ax = plt.subplots(figsize=(14, 10))
-sns.barplot(x=diff.values, y=diff.index, palette=['red' if x < 0 else 'green' for x in diff])
+    fig, ax = plt.subplots(figsize=(14, 10))
+    sns.barplot(x=diff.values, y=diff.index, palette=['red' if x < 0 else 'green' for x in diff])
     
-ax.axvline(0, color='black', linewidth=0.8)
-ax.set_xlabel('Difference from Recommended Values', fontsize=14)
-ax.set_ylabel('Nutrient', fontsize=14)
-ax.set_title('Nutrients Difference from Recommended Intake', fontsize=16)
+    ax.axvline(0, color='black', linewidth=0.8)
+    ax.set_xlabel('Difference from Recommended Values', fontsize=14)
+    ax.set_ylabel('Nutrient', fontsize=14)
+    ax.set_title('Nutrients Difference from Recommended Intake', fontsize=16)
     
-# Increase the size of tick labels
-ax.tick_params(axis='x', labelsize=12)
-ax.tick_params(axis='y', labelsize=12)
+    # Increase the size of tick labels
+    ax.tick_params(axis='x', labelsize=12)
+    ax.tick_params(axis='y', labelsize=12)
     
-plt.xticks(rotation=90)
-st.pyplot(fig)
+    plt.xticks(rotation=90)
+    st.pyplot(fig)
 
 # Additional food suggestions
 if recommended_calories is not None:
@@ -192,16 +203,4 @@ if col4.button("Choline"):
     generate_top_foods(df_food, 'Choline', 'Choline')
 if col5.button("Calcium"):
     generate_top_foods(df_food, 'Calcium', 'Calcium')
-col1, col2, col3, col4, col5 = st.columns(5)
-if col1.button("Iron"):
-    generate_top_foods(df_food, 'Iron', 'Iron')
-if col2.button("Magnesium"):
-    generate_top_foods(df_food, 'Magnesium', 'Magnesium')
-if col3.button("Zinc"):
-    generate_top_foods(df_food, 'Zinc', 'Zinc')
-if col4.button("Potassium"):
-    generate_top_foods(df_food, 'Potassium', 'Potassium')
-if col5.button("Phosphorus"):
-    generate_top_foods(df_food, 'Phosphorus', 'Phosphorus')
-if col1.button("Polyunsaturated (good) Fat"):
-    generate_top_foods(df_food, 'Polyunsaturated (good) Fat', 'Polyunsaturated (good) Fat')
+col1, col2
