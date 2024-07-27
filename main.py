@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import seaborn as sns
-from matplotlib import pyplot as plt
 import plotly.express as px
+import plotly.graph_objects as go
 from functions import (
     load_dfs,
     load_model,
