@@ -175,7 +175,7 @@ vitamins = {
     "Selenium": "Selenium",
     "Thiamin": "Thiamin",
     "Niacin": "Niacin",
-    "Food Folate": "Food Folate"
+    "Folate": "Folate"
 }
 
 minerals = {
@@ -218,7 +218,7 @@ if col3.button("Thiamin"):
 if col4.button("Niacin"):
     st.write(generate_top_foods(df_food, 'Niacin', 'Niacin'))
 if col5.button("Folate"):
-    st.write(generate_top_foods(df_food, 'Food Folate', 'Food Folate'))
+    st.write(generate_top_foods(df_food, 'Folate', 'Folate'))
 
 # Minerals section
 st.subheader("Minerals")
