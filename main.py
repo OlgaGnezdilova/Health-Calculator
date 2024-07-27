@@ -1,4 +1,7 @@
 import streamlit as st
+import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
 from functions import (
     load_dfs,
     load_model,
@@ -7,35 +10,38 @@ from functions import (
     display_food_suggestions,
     generate_top_foods
 )
-import seaborn as sns
-import pandas as pd
-from matplotlib import pyplot as plt
 
-# Add Open Graph metadata for social media previews
-st.markdown(
-    """
-    <meta property="og:title" content="Health Calculator">
-    <meta property="og:description" content="A Streamlit app to calculate your daily caloric requirements and suggest healthy foods.">
-    <meta property="og:image" content="URL_TO_YOUR_IMAGE">
-    <meta property="og:url" content="URL_OF_YOUR_APP">
-    <meta name="twitter:card" content="summary_large_image">
-    """,
-    unsafe_allow_html=True,
-)
+# Function to add meta tags for social media previews
+def add_meta_tags():
+    st.markdown(
+        """
+        <head>
+            <meta property="og:title" content="Health Calculator">
+            <meta property="og:description" content="A Streamlit app to calculate your daily caloric requirements and suggest healthy foods.">
+            <meta property="og:image" content="URL_TO_YOUR_IMAGE">
+            <meta property="og:url" content="URL_OF_YOUR_APP">
+            <meta name="twitter:card" content="summary_large_image">
+        </head>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# Load CSS
-st.markdown(
-    """
-    <style>
-        %s
-    </style>
-    """ % open("style.css").read(),
-    unsafe_allow_html=True,
-)
+# Add meta tags to the app
+add_meta_tags()
+
+# Load CSS (check if exists to prevent file not found error)
+try:
+    with open("style.css") as css_file:
+        st.markdown(f"<style>{css_file.read()}</style>", unsafe_allow_html=True)
+except FileNotFoundError:
+    st.warning("The style.css file was not found. Ensure it exists in the correct path.")
 
 # Load data and model
-df_food, df_recomm = load_dfs()
-model = load_model()
+try:
+    df_food, df_recomm = load_dfs()
+    model = load_model()
+except Exception as e:
+    st.error(f"Error loading data or model: {e}")
 
 # App Header
 st.markdown("<h1 style='text-align: center;'>Health Calculator 🍎 </h1>", unsafe_allow_html=True)
@@ -52,11 +58,11 @@ col1 = st.columns(1)[0]
 col2, col3 = st.columns(2)
 col4, col5 = st.columns(2)
 
-height = col1.text_input("Your height:")
-weight = col2.text_input("Your weight:")
-age = col3.text_input("Your age:")
-gender = col4.text_input("Your gender (m/f):").lower()
-activity_factor = col5.text_input("Your physical activity level (1 low, 1.3 med, 1.5 high):")
+height = col1.text_input("Your height:", placeholder="e.g., 170 cm")
+weight = col2.text_input("Your weight:", placeholder="e.g., 70 kg")
+age = col3.text_input("Your age:", placeholder="e.g., 25")
+gender = col4.text_input("Your gender (m/f):", placeholder="e.g., m").lower()
+activity_factor = col5.text_input("Your physical activity level (1 low, 1.3 med, 1.5 high):", placeholder="e.g., 1.3")
 
 # Gender encoding
 label_encoder = {'m': 0, 'f': 1}
@@ -80,33 +86,33 @@ else:
 
 # User's food input
 st.subheader("What did you eat today?")
-selected_foods = st.multiselect("", options=df_food['Food'])
+selected_foods = st.multiselect("Select foods from the list:", options=df_food['Food'])
 df_consumed = df_food[df_food['Food'].isin(selected_foods)].round(2)
 
 if st.button("Submit"):
-    st.write("Your today's result:") 
+    st.write("Your today's result:")
+    total_row = df_consumed.drop('Food', axis=1).sum(numeric_only=True).round(2)
+    total_row['Food'] = 'TOTAL TODAY'
+    df_recomm['Food'] = 'RECOMMENDED ' + df_recomm['Food']
+    df_consumed = pd.concat([df_consumed, total_row.to_frame().T, df_recomm])
+    df_consumed = df_consumed.reset_index(drop=True).drop(['Unnamed: 0'], axis=1)
+    df_consumed.set_index('Food', inplace=True)
     st.write(df_consumed)
-    
-    # Remove non-numeric columns and rows
-    row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
-    recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
+
+    # Display nutrient differences
+    row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')
+    recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')
     diff = row_to_display - recommended_values
-    
-    # Sort differences from the biggest lack to the lowest
     diff = diff.sort_values()
 
     fig, ax = plt.subplots(figsize=(14, 10))
     sns.barplot(x=diff.values, y=diff.index, palette=['red' if x < 0 else 'green' for x in diff])
-    
     ax.axvline(0, color='black', linewidth=0.8)
     ax.set_xlabel('Difference from Recommended Values', fontsize=14)
     ax.set_ylabel('Nutrient', fontsize=14)
     ax.set_title('Nutrients Difference from Recommended Intake', fontsize=16)
-    
-    # Increase the size of tick labels
     ax.tick_params(axis='x', labelsize=12)
     ax.tick_params(axis='y', labelsize=12)
-    
     plt.xticks(rotation=90)
     st.pyplot(fig)
 
@@ -129,7 +135,12 @@ if recommended_calories is not None:
         st.subheader(f"Well done! You have {-calories_difference} more kcal to consume today. Do you want me to suggest you something nice?")
         col1, col2 = st.columns(2)
         if col1.button("Yes"):
-            display_food_suggestions(df_food, df_consumed, calories_difference)
+            suggestions = display_food_suggestions(df_food, df_consumed, calories_difference)
+            if not suggestions.empty:
+                st.subheader("Here's a list of food suggestions 🥗")
+                st.write(suggestions)
+            else:
+                st.write("No suggestions available. You're already meeting or exceeding your daily calorie goal!")
         if col2.button("No"):
             st.subheader("Good luck with your choices!")
 
@@ -164,7 +175,6 @@ minerals = {
 }
 
 # Vitamins section
-st.subheader("")
 st.subheader("Vitamins")
 col1, col2, col3, col4, col5 = st.columns(5)
 if col1.button("Vitamin A"):
@@ -190,7 +200,6 @@ if col5.button("Folate"):
     generate_top_foods(df_food, 'Folate', 'Folate')
 
 # Minerals section
-st.subheader("")
 st.subheader("Minerals")
 col1, col2, col3, col4, col5 = st.columns(5)
 if col1.button("Fiber"):
@@ -203,4 +212,16 @@ if col4.button("Choline"):
     generate_top_foods(df_food, 'Choline', 'Choline')
 if col5.button("Calcium"):
     generate_top_foods(df_food, 'Calcium', 'Calcium')
-col1, col2
+col1, col2, col3, col4, col5 = st.columns(5)
+if col1.button("Iron"):
+    generate_top_foods(df_food, 'Iron', 'Iron')
+if col2.button("Magnesium"):
+    generate_top_foods(df_food, 'Magnesium', 'Magnesium')
+if col3.button("Zinc"):
+    generate_top_foods(df_food, 'Zinc', 'Zinc')
+if col4.button("Potassium"):
+    generate_top_foods(df_food, 'Potassium', 'Potassium')
+if col5.button("Phosphorus"):
+    generate_top_foods(df_food, 'Phosphorus', 'Phosphorus')
+if col1.button("Polyunsaturated (good) Fat"):
+    generate_top_foods(df_food, 'Polyunsaturated (good) Fat', 'Polyunsaturated (good) Fat')
