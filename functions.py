@@ -4,6 +4,20 @@ import numpy as np
 import requests
 import os
 
+def add_meta_tags():
+    st.markdown(
+        """
+        <head>
+            <meta property="og:title" content="Health Calculator">
+            <meta property="og:description" content="A Streamlit app to calculate your daily caloric requirements and suggest healthy foods.">
+            <meta property="og:image" content="URL_TO_YOUR_IMAGE">
+            <meta property="og:url" content="URL_OF_YOUR_APP">
+            <meta name="twitter:card" content="summary_large_image">
+        </head>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def load_dfs():
     url1 = 'https://raw.githubusercontent.com/OlgaGnezdilova/Health-Calculator/main/df_food.csv'
     url2 = 'https://raw.githubusercontent.com/OlgaGnezdilova/Health-Calculator/main/recommendations.csv'
@@ -39,11 +53,14 @@ def predict_calories(model, gender_encoded, age, height, weight, duration, pulse
 
 def display_food_suggestions(df_food, df_consumed, calories_difference):
     difference = df_consumed['Calories'].sum() - calories_difference
-    suggestions = df_food[df_food['Calories'] < -difference][['Food', 'Calories', 'Sugar']]
+    suggestions = df_food[df_food['Calories'] < -difference][['Food', 'Calories', 'Sugar', 'Carbohydrate']]
+    suggestions['Calories'] = suggestions['Calories'].apply(lambda x: f'{x:.2f}')
+    suggestions['Sugar'] = suggestions['Sugar'].apply(lambda x: f'{x:.2f}')
+    suggestions['Carbohydrate'] = suggestions['Carbohydrate'].apply(lambda x: f'{x:.2f}')
     if not suggestions.empty:
-        suggestions_no_index = suggestions.reset_index(drop=True)
-        suggestions_no_index.index += 1
-        return suggestions_no_index.sample(10)
+        suggestions_no_index = suggestions.sample(10).reset_index(drop=True)
+        suggestions_no_index.index = suggestions_no_index.index + 1
+        return suggestions_no_index
     else:
         return pd.DataFrame()
 
@@ -53,8 +70,8 @@ def generate_top_foods(df, nutrient, column_name):
     top_foods['Sugar'] = top_foods['Sugar'].apply(lambda x: f'{x:.2f}')
     top_foods['Carbohydrate'] = top_foods['Carbohydrate'].apply(lambda x: f'{x:.2f}')
     top_foods_no_index = top_foods.reset_index(drop=True)
-    top_foods_no_index.index += 1
-    st.write(top_foods_no_index)
+    top_foods_no_index.index = top_foods_no_index.index + 1
+    return top_foods_no_index
 
 
 

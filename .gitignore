@@ -1,4 +1,12 @@
-# Ignore virtual environment folder
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
 venv/
 Trash/
-Readme.md/
+
+# Ignore other common files and directories
+.DS_Store
+*.log
+*.sqlite3

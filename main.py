@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
+import plotly.express as px
 from functions import (
     load_dfs,
     load_model,
@@ -58,10 +59,10 @@ col1 = st.columns(1)[0]
 col2, col3 = st.columns(2)
 col4, col5 = st.columns(2)
 
-height = col1.text_input("Your height:", placeholder="e.g., 170 cm")
-weight = col2.text_input("Your weight:", placeholder="e.g., 70 kg")
-age = col3.text_input("Your age:", placeholder="e.g., 25")
-gender = col4.text_input("Your gender (m/f):", placeholder="e.g., m").lower()
+height = col1.text_input("Your height:", placeholder="e.g., 170")
+weight = col2.text_input("Your weight:", placeholder="e.g., 80")
+age = col3.text_input("Your age:", placeholder="e.g., 40")
+gender = col4.text_input("Your gender (m/f):", placeholder="e.g., f").lower()
 activity_factor = col5.text_input("Your physical activity level (1 low, 1.3 med, 1.5 high):", placeholder="e.g., 1.3")
 
 # Gender encoding
@@ -90,59 +91,76 @@ selected_foods = st.multiselect("Select foods from the list:", options=df_food['
 df_consumed = df_food[df_food['Food'].isin(selected_foods)].round(2)
 
 if st.button("Submit"):
-    st.write("Your today's result:")
+    st.subheader("Your today's result:")
     total_row = df_consumed.drop('Food', axis=1).sum(numeric_only=True).round(2)
     total_row['Food'] = 'TOTAL TODAY'
     df_recomm['Food'] = 'RECOMMENDED ' + df_recomm['Food']
-    df_consumed = pd.concat([df_consumed, total_row.to_frame().T, df_recomm])
+    your_score_row = pd.Series(0, index=df_consumed.columns[1:], name=-1).round(2)
+    your_score_row['Food'] = 'YOUR SCORE'   
+    df_consumed = pd.concat([df_consumed, total_row.to_frame().T, df_recomm, your_score_row.to_frame().T])
+    df_consumed.iloc[-2, df_consumed.columns.get_loc('Calories')] = recommended_calories
+    df_consumed.iloc[-1, -27:] = (df_consumed.iloc[-3, -27:].values - df_consumed.iloc[-2, -27:].values).astype(float).round(2)
     df_consumed = df_consumed.reset_index(drop=True).drop(['Unnamed: 0'], axis=1)
     df_consumed.set_index('Food', inplace=True)
     st.write(df_consumed)
+    
+    # Diaplay the plot
+    st.subheader("Check your nutrition score for today on the chart")
 
-    # Display nutrient differences
-    row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')
-    recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')
+    # Extract the relevant row and ensure numeric
+    row_to_display = df_consumed.iloc[-1, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
+    recommended_values = df_recomm.iloc[0, 1:].apply(pd.to_numeric, errors='coerce')  # Skip the 'Food' column and ensure numeric
+
+    # Calculate the difference
     diff = row_to_display - recommended_values
-    diff = diff.sort_values()
 
-    fig, ax = plt.subplots(figsize=(14, 10))
-    sns.barplot(x=diff.values, y=diff.index, palette=['red' if x < 0 else 'green' for x in diff])
-    ax.axvline(0, color='black', linewidth=0.8)
-    ax.set_xlabel('Difference from Recommended Values', fontsize=14)
-    ax.set_ylabel('Nutrient', fontsize=14)
-    ax.set_title('Nutrients Difference from Recommended Intake', fontsize=16)
-    ax.tick_params(axis='x', labelsize=12)
-    ax.tick_params(axis='y', labelsize=12)
-    plt.xticks(rotation=90)
-    st.pyplot(fig)
+    # Convert differences to a DataFrame for plotting
+    diff_df = diff.reset_index()
+    diff_df.columns = ['Nutrient', 'Difference']
+
+    # Sort differences from the lowest to the highest
+    diff_df = diff_df.sort_values(by='Difference')
+
+    # Add a column for color based on the difference value
+    diff_df['Color'] = diff_df['Difference'].apply(lambda x: 'lack' if x < 0 else 'plenty')
+
+    # Create the bar plot using Plotly with red and green coloring
+    fig = px.bar(diff_df, x='Difference', y='Nutrient', orientation='h',
+             labels={'Difference': 'Difference from Recommended Values', 'Nutrient': 'Nutrient', 'Color': 'Score'},
+             title='   Nutrients Difference from Recommended Intake',
+             color='Color', color_discrete_map={'lack': 'red', 'plenty': 'green'})
+
+    fig.update_layout(coloraxis_showscale=False)
+    st.plotly_chart(fig)
 
 # Additional food suggestions
-if recommended_calories is not None:
-    calories_difference = df_consumed['Calories'].sum() - recommended_calories
-    if calories_difference > 0:
-        st.subheader(f"You have {calories_difference} kcal to store or burn today")
-        st.subheader("Do you want to store or burn your calories?")
-        duration = st.slider("Minutes of activity:", 1, 180)
-        pulse = st.slider("Your pulse:", 70, 200)
-        col1, col2 = st.columns(2)
-        if col1.button("Store"):
-            st.subheader("Congrats! You stored your calories!")
-        if col2.button("Burn"):
-            prediction = predict_calories(model, gender_encoded, age, height, weight, duration, pulse)
-            st.subheader(f"Predicted Calories Burned {abs(prediction[0]):.2f} kcal 🏓")
-            st.write("You can trust the prediction. The R2 of the model is 0.95!")
-    else:
-        st.subheader(f"Well done! You have {-calories_difference} more kcal to consume today. Do you want me to suggest you something nice?")
-        col1, col2 = st.columns(2)
-        if col1.button("Yes"):
-            suggestions = display_food_suggestions(df_food, df_consumed, calories_difference)
-            if not suggestions.empty:
-                st.subheader("Here's a list of food suggestions 🥗")
-                st.write(suggestions)
-            else:
-                st.write("No suggestions available. You're already meeting or exceeding your daily calorie goal!")
-        if col2.button("No"):
-            st.subheader("Good luck with your choices!")
+calories_difference = df_consumed['Calories'].sum() - recommended_calories
+if calories_difference > 0:
+    st.subheader(f"You have {calories_difference} kcal to store or burn today")
+    st.subheader("Do you want to store or burn your calories?")
+    duration = st.slider("Minutes of activity:", 1, 180)
+    pulse = st.slider("Your pulse:, approx. 115-120 for light, 120-135 for fitness, 165-175 for aerobic, 165-175 for anaerobic, 175-185 max):", 70, 200)
+    col1, col2 = st.columns(2)
+    if col1.button("Store"):
+        st.subheader("Congrats! You stored your calories!")
+    if col2.button("Burn"):
+        prediction = predict_calories(model, gender_encoded, age, height, weight, duration, pulse)
+        st.subheader(f"Predicted Calories Burned {abs(prediction[0]):.2f} kcal 🏓")
+else:
+    calories_difference = abs(calories_difference)
+    st.subheader(f"Well done! You have {calories_difference} more kcal to consume today. Do you want me to suggest you something nice?")
+    col1, col2 = st.columns(2)
+    if col1.button("Yes"):
+        st.subheader("Here's a list of food suggestions 🥗")
+        suggestions = display_food_suggestions(df_food, df_consumed, calories_difference)
+        if suggestions.empty:
+            st.write("No suitable suggestions found based on your criteria. Here's a list of all available foods:")
+            st.dataframe(df_food[['Food', 'Calories', 'Sugar']])
+        else:
+            st.dataframe(suggestions)
+    if col2.button("No"):
+        st.subheader("Good luck with your choices!")
+
 
 # Vitamin and Mineral buttons
 st.subheader("Look what you can eat to fulfill nutrition gaps")
@@ -157,7 +175,7 @@ vitamins = {
     "Selenium": "Selenium",
     "Thiamin": "Thiamin",
     "Niacin": "Niacin",
-    "Folate": "Folate"
+    "Food Folate": "Food Folate"
 }
 
 minerals = {
@@ -177,51 +195,59 @@ minerals = {
 # Vitamins section
 st.subheader("Vitamins")
 col1, col2, col3, col4, col5 = st.columns(5)
+
 if col1.button("Vitamin A"):
-    generate_top_foods(df_food, 'Vitamin A', 'Vitamin A')
+    st.write(generate_top_foods(df_food, 'Vitamin A', 'Vitamin A'))
 if col2.button("Vitamin B6"):
-    generate_top_foods(df_food, 'Vitamin B6', 'Vitamin B6')
+    st.write(generate_top_foods(df_food, 'Vitamin B6', 'Vitamin B6'))
 if col3.button("Vitamin B12"):
-    generate_top_foods(df_food, 'Vitamin B12', 'Vitamin B12')
+    st.write(generate_top_foods(df_food, 'Vitamin B12', 'Vitamin B12'))
 if col4.button("Vitamin C"):
-    generate_top_foods(df_food, 'Vitamin C', 'Vitamin C')
+    st.write(generate_top_foods(df_food, 'Vitamin C', 'Vitamin C'))
 if col5.button("Vitamin D"):
-    generate_top_foods(df_food, 'Vitamin D', 'Vitamin D')
+    st.write(generate_top_foods(df_food, 'Vitamin D', 'Vitamin D'))
+
 col1, col2, col3, col4, col5 = st.columns(5)
+
 if col1.button("Vitamin K"):
-    generate_top_foods(df_food, 'Vitamin K', 'Vitamin K')
+    st.write(generate_top_foods(df_food, 'Vitamin K', 'Vitamin K'))
 if col2.button("Selenium"):
-    generate_top_foods(df_food, 'Selenium', 'Selenium')
+    st.write(generate_top_foods(df_food, 'Selenium', 'Selenium'))
 if col3.button("Thiamin"):
-    generate_top_foods(df_food, 'Thiamin', 'Thiamin')
+    st.write(generate_top_foods(df_food, 'Thiamin', 'Thiamin'))
 if col4.button("Niacin"):
-    generate_top_foods(df_food, 'Niacin', 'Niacin')
+    st.write(generate_top_foods(df_food, 'Niacin', 'Niacin'))
 if col5.button("Folate"):
-    generate_top_foods(df_food, 'Folate', 'Folate')
+    st.write(generate_top_foods(df_food, 'Food Folate', 'Food Folate'))
 
 # Minerals section
 st.subheader("Minerals")
 col1, col2, col3, col4, col5 = st.columns(5)
+
 if col1.button("Fiber"):
-    generate_top_foods(df_food, 'Fiber', 'Fiber')
+    st.write(generate_top_foods(df_food, 'Fiber', 'Fiber'))
 if col2.button("Protein"):
-    generate_top_foods(df_food, 'Protein', 'Protein')
-if col3.button("Copper"):
-    generate_top_foods(df_food, 'Copper', 'Copper')
-if col4.button("Choline"):
-    generate_top_foods(df_food, 'Choline', 'Choline')
-if col5.button("Calcium"):
-    generate_top_foods(df_food, 'Calcium', 'Calcium')
-col1, col2, col3, col4, col5 = st.columns(5)
-if col1.button("Iron"):
-    generate_top_foods(df_food, 'Iron', 'Iron')
-if col2.button("Magnesium"):
-    generate_top_foods(df_food, 'Magnesium', 'Magnesium')
-if col3.button("Zinc"):
-    generate_top_foods(df_food, 'Zinc', 'Zinc')
-if col4.button("Potassium"):
-    generate_top_foods(df_food, 'Potassium', 'Potassium')
-if col5.button("Phosphorus"):
-    generate_top_foods(df_food, 'Phosphorus', 'Phosphorus')
-if col1.button("Polyunsaturated (good) Fat"):
-    generate_top_foods(df_food, 'Polyunsaturated (good) Fat', 'Polyunsaturated (good) Fat')
+    st.write(generate_top_foods(df_food, 'Protein', 'Protein'))
+if col3.button("Iron"):
+    st.write(generate_top_foods(df_food, 'Iron', 'Iron'))
+if col4.button("Phosphorus"):
+    st.write(generate_top_foods(df_food, 'Phosphorus', 'Phosphorus'))
+if col5.button("Polyunsaturated (good) Fat"):
+    st.write(generate_top_foods(df_food, 'Polyunsaturated (good) Fat', 'Polyunsaturated (good) Fat'))
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+if col1.button("Copper"):
+    st.write(generate_top_foods(df_food, 'Copper', 'Copper'))
+if col2.button("Choline"):
+    st.write(generate_top_foods(df_food, 'Choline', 'Choline'))
+if col3.button("Calcium"):
+    st.write(generate_top_foods(df_food, 'Calcium', 'Calcium'))
+if col4.button("Magnesium"):
+    st.write(generate_top_foods(df_food, 'Magnesium', 'Magnesium'))
+if col5.button("Potassium"):
+    st.write(generate_top_foods(df_food, 'Potassium', 'Potassium'))
+if col6.button("Zinc"):
+    st.write(generate_top_foods(df_food, 'Zinc', 'Zinc'))
+
+
+
